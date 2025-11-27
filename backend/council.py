@@ -1,6 +1,7 @@
 """3-stage LLM Council orchestration."""
 
 from typing import List, Dict, Any, Tuple
+import asyncio
 from .openrouter import query_models_parallel, query_model
 from .config import COUNCIL_MODELS, CHAIRMAN_MODEL
 from .search import perform_web_search
@@ -337,7 +338,6 @@ async def run_full_council(user_query: str, use_web_search: bool = False) -> Tup
         # We use the user query directly for search.
         # In a more advanced version, we might generate a specific search query.
         # Run in thread to avoid blocking the event loop
-        import asyncio
         search_context = await asyncio.to_thread(perform_web_search, user_query)
 
     # Stage 1: Collect individual responses

@@ -11,7 +11,7 @@ export default function ChatInterface({
   isLoading,
 }) {
   const [input, setInput] = useState('');
-  const [webSearch, setWebSearch] = useState(true);
+  const [webSearch, setWebSearch] = useState(false);
   const messagesEndRef = useRef(null);
 
   const scrollToBottom = () => {

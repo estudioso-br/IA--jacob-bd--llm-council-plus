@@ -132,10 +132,10 @@
   justify-content: center;
   gap: 6px;
   padding: 8px 12px;
-  background: #f5f5f5;
-  border: 1px solid #e0e0e0;
+  background: #fff0f0;
+  border: 1px solid #ffcdd2;
   border-radius: 8px;
-  color: #666;
+  color: #d32f2f;
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
@@ -144,14 +144,19 @@
 }
 
 .web-search-button:hover:not(:disabled) {
-  background: #eef2f6;
-  border-color: #d0d7de;
+  background: #ffebee;
+  border-color: #ef9a9a;
 }
 
 .web-search-button.active {
-  background: #e3f2fd;
-  border-color: #4a90e2;
-  color: #1976d2;
+  background: #e8f5e9;
+  border-color: #a5d6a7;
+  color: #2e7d32;
+}
+
+.web-search-button.active:hover:not(:disabled) {
+  background: #c8e6c9;
+  border-color: #81c784;
 }
 
 .search-icon {
