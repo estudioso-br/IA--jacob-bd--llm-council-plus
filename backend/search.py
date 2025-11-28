@@ -95,6 +95,11 @@ def _search_duckduckgo(query: str, max_results: int = 5, full_content_results: i
     for idx, url in urls_to_fetch:
         content = _fetch_with_jina(url)
         if content:
+            # If content is very short (likely paywall/cookie wall/failed parse),
+            # append the original summary to ensure we have some info.
+            if len(content) < 500:
+                original_summary = search_results_data[idx]['summary']
+                content += f"\n\n[System Note: Full content fetch yielded limited text. Appending original summary.]\nOriginal Summary: {original_summary}"
             search_results_data[idx]['content'] = content
 
     if not search_results_data:
@@ -119,7 +124,7 @@ def _search_duckduckgo(query: str, max_results: int = 5, full_content_results: i
     return "\n\n".join(formatted)
 
 
-def _fetch_with_jina(url: str, timeout: float = 10.0) -> Optional[str]:
+def _fetch_with_jina(url: str, timeout: float = 25.0) -> Optional[str]:
     """
     Fetch article content using Jina Reader API.
     Returns clean markdown content.
@@ -135,6 +140,9 @@ def _fetch_with_jina(url: str, timeout: float = 10.0) -> Optional[str]:
             else:
                 logger.warning(f"Jina Reader returned {response.status_code} for {url}")
                 return None
+    except httpx.TimeoutException:
+        logger.warning(f"Timeout while fetching content via Jina for {url}")
+        return None
     except Exception as e:
         logger.warning(f"Failed to fetch content via Jina for {url}: {e}")
         return None
@@ -245,6 +253,10 @@ def _search_brave(query: str, max_results: int = 5, full_content_results: int = 
         for idx, url in urls_to_fetch:
             content = _fetch_with_jina(url)
             if content:
+                # If content is very short, append summary
+                if len(content) < 500:
+                    original_summary = search_results_data[idx]['summary']
+                    content += f"\n\n[System Note: Full content fetch yielded limited text. Appending original summary.]\nOriginal Summary: {original_summary}"
                 search_results_data[idx]['content'] = content
 
         if not search_results_data:

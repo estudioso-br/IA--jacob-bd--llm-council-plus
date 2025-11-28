@@ -11,12 +11,50 @@ function App() {
   const [currentConversation, setCurrentConversation] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [ollamaStatus, setOllamaStatus] = useState({
+    connected: false,
+    lastConnected: null,
+    testing: false
+  });
   const abortControllerRef = useRef(null);
+
+  // Auto-test Ollama connection on mount
+  useEffect(() => {
+    testOllamaConnection();
+  }, []);
 
   // Load conversations on mount
   useEffect(() => {
     loadConversations();
   }, []);
+
+  const testOllamaConnection = async () => {
+    try {
+      setOllamaStatus(prev => ({ ...prev, testing: true }));
+      // Get current settings to grab Ollama base URL
+      const settings = await api.getSettings();
+
+      if (!settings.ollama_base_url) {
+        setOllamaStatus({ connected: false, lastConnected: null, testing: false });
+        return;
+      }
+
+      const result = await api.testOllamaConnection(settings.ollama_base_url);
+
+      if (result.success) {
+        setOllamaStatus({
+          connected: true,
+          lastConnected: new Date().toLocaleString(),
+          testing: false
+        });
+      } else {
+        setOllamaStatus({ connected: false, lastConnected: null, testing: false });
+      }
+    } catch (error) {
+      console.error('Ollama connection test failed:', error);
+      setOllamaStatus({ connected: false, lastConnected: null, testing: false });
+    }
+  };
 
   // Load conversation details when selected
   useEffect(() => {
@@ -259,7 +297,11 @@ function App() {
         isLoading={isLoading}
       />
       {showSettings && (
-        <Settings onClose={() => setShowSettings(false)} />
+        <Settings
+          onClose={() => setShowSettings(false)}
+          ollamaStatus={ollamaStatus}
+          onRefreshOllama={testOllamaConnection}
+        />
       )}
     </div>
   );

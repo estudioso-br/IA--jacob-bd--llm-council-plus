@@ -163,6 +163,31 @@ def add_assistant_message(
     save_conversation(conversation)
 
 
+def add_error_message(conversation_id: str, error_text: str):
+    """
+    Add an error message to a conversation to record a failed turn.
+
+    Args:
+        conversation_id: Conversation identifier
+        error_text: The error description
+    """
+    conversation = get_conversation(conversation_id)
+    if conversation is None:
+        raise ValueError(f"Conversation {conversation_id} not found")
+
+    message = {
+        "role": "assistant",
+        "content": None,
+        "error": error_text,
+        "stage1": [],
+        "stage2": [],
+        "stage3": None
+    }
+
+    conversation["messages"].append(message)
+    save_conversation(conversation)
+
+
 def update_conversation_title(conversation_id: str, title: str):
     """
     Update the title of a conversation.

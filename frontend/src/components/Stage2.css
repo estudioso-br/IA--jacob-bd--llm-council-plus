@@ -87,6 +87,10 @@
   cursor: pointer;
   font-size: 14px;
   transition: all 0.2s;
+  flex: 1 1 auto;
+  min-width: 120px;
+  max-width: 220px;
+  text-align: center;
 }
 
 .stage2 .tab:hover {

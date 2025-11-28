@@ -80,6 +80,7 @@ export default function ChatInterface({
                     <div className="stage-loading">
                       <div className="spinner"></div>
                       <span>Searching the web...</span>
+                      <button className="abort-btn-inline" onClick={onAbort}>Stop</button>
                     </div>
                   )}
 
@@ -96,6 +97,7 @@ export default function ChatInterface({
                     <div className="stage-loading">
                       <div className="spinner"></div>
                       <span>Running Stage 1: Collecting individual responses...</span>
+                      <button className="abort-btn-inline" onClick={onAbort}>Stop</button>
                     </div>
                   )}
                   {msg.stage1 && <Stage1 responses={msg.stage1} />}
@@ -105,6 +107,7 @@ export default function ChatInterface({
                     <div className="stage-loading">
                       <div className="spinner"></div>
                       <span>Running Stage 2: Peer rankings...</span>
+                      <button className="abort-btn-inline" onClick={onAbort}>Stop</button>
                     </div>
                   )}
                   {msg.stage2 && (
@@ -120,6 +123,7 @@ export default function ChatInterface({
                     <div className="stage-loading">
                       <div className="spinner"></div>
                       <span>Running Stage 3: Final synthesis...</span>
+                      <button className="abort-btn-inline" onClick={onAbort}>Stop</button>
                     </div>
                   )}
                   {msg.stage3 && <Stage3 finalResponse={msg.stage3} />}

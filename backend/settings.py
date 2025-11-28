@@ -18,6 +18,9 @@ DEFAULT_COUNCIL_MODELS = [
     "x-ai/grok-3",
 ]
 DEFAULT_CHAIRMAN_MODEL = "google/gemini-2.5-pro"
+DEFAULT_SEARCH_QUERY_MODEL = "google/gemini-2.5-flash"
+DEFAULT_TITLE_MODEL = "google/gemini-2.5-flash"
+
 
 # Available models for selection (popular OpenRouter models)
 AVAILABLE_MODELS = [
@@ -50,15 +53,58 @@ AVAILABLE_MODELS = [
 ]
 
 
+from enum import Enum
+
+from .prompts import (
+    STAGE1_PROMPT_DEFAULT,
+    STAGE2_PROMPT_DEFAULT,
+    STAGE3_PROMPT_DEFAULT,
+    TITLE_PROMPT_DEFAULT,
+    SEARCH_QUERY_PROMPT_DEFAULT
+)
+
+class LLMProvider(str, Enum):
+    OPENROUTER = "openrouter"
+    OLLAMA = "ollama"
+    HYBRID = "hybrid"
+
 class Settings(BaseModel):
     """Application settings."""
     search_provider: SearchProvider = SearchProvider.DUCKDUCKGO
+    
+    # LLM Provider settings
+    llm_provider: LLMProvider = LLMProvider.OPENROUTER
+    
+    # API Keys
     tavily_api_key: Optional[str] = None
     brave_api_key: Optional[str] = None
     openrouter_api_key: Optional[str] = None
+    
+    # OpenRouter Models
     council_models: List[str] = DEFAULT_COUNCIL_MODELS.copy()
     chairman_model: str = DEFAULT_CHAIRMAN_MODEL
+    
+    # Ollama Settings
+    ollama_base_url: str = "http://localhost:11434"
+    ollama_council_models: List[str] = []
+    ollama_chairman_model: str = ""
+
+    # Hybrid Settings
+    hybrid_council_models: List[str] = []
+    hybrid_chairman_model: str = ""
+    
+    # Utility Models (for search query generation and titles)
+    search_query_model: str = DEFAULT_SEARCH_QUERY_MODEL
+    title_model: str = DEFAULT_TITLE_MODEL
+    
     full_content_results: int = 3  # Number of search results to fetch full content for (0 to disable)
+
+    # System Prompts
+    stage1_prompt: str = STAGE1_PROMPT_DEFAULT
+    stage2_prompt: str = STAGE2_PROMPT_DEFAULT
+    stage3_prompt: str = STAGE3_PROMPT_DEFAULT
+    title_prompt: str = TITLE_PROMPT_DEFAULT
+    search_query_prompt: str = SEARCH_QUERY_PROMPT_DEFAULT
 
     class Config:
         use_enum_values = True

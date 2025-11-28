@@ -1,4 +1,5 @@
 :root {
+  /* Existing properties */
   font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
   line-height: 1.5;
   font-weight: 400;
@@ -7,6 +8,18 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+
+  /* Color Variables */
+  --primary-color: #4a90e2;
+  --primary-color-dark: #3a7bc8;
+  --background-color: #f8fafc;
+  --surface-color: #ffffff;
+  --text-primary: #333333;
+  --text-secondary: #666666;
+  --border-color: #e0e0e0;
+  --shadow-color: rgba(0, 0, 0, 0.05);
+  --error-color: #f44336; /* Red for errors */
+  --error-color-dark: #d32f2f; /* Darker red for hover */
 }
 
 * {

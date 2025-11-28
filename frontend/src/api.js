@@ -143,12 +143,44 @@ export const api = {
   },
 
   /**
+   * Test Ollama connection.
+   */
+  async testOllamaConnection(baseUrl) {
+    const response = await fetch(`${API_BASE}/api/settings/test-ollama`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ base_url: baseUrl }),
+    });
+    if (!response.ok) {
+      throw new Error('Failed to test Ollama connection');
+    }
+    return response.json();
+  },
+
+  /**
    * Get available models from OpenRouter.
    */
   async getModels() {
     const response = await fetch(`${API_BASE}/api/models`);
     if (!response.ok) {
       throw new Error('Failed to get models');
+    }
+    return response.json();
+  },
+
+  /**
+   * Get available models from Ollama.
+   */
+  async getOllamaModels(baseUrl) {
+    let url = `${API_BASE}/api/ollama/tags`;
+    if (baseUrl) {
+      url += `?base_url=${encodeURIComponent(baseUrl)}`;
+    }
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error('Failed to get Ollama models');
     }
     return response.json();
   },

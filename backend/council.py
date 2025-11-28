@@ -2,10 +2,76 @@
 
 from typing import List, Dict, Any, Tuple
 import asyncio
-from .openrouter import query_models_parallel, query_model
-from .config import get_council_models, get_chairman_model
+from . import openrouter
+from . import ollama_client
+from .config import get_council_models, get_chairman_model, get_llm_provider
 from .search import perform_web_search, SearchProvider
 from .settings import get_settings
+
+
+async def query_model(model: str, messages: List[Dict[str, str]], timeout: float = 120.0) -> Dict[str, Any]:
+    """Dispatch query to appropriate provider."""
+    provider = get_llm_provider()
+    
+    if provider == "hybrid":
+        if model.startswith("ollama:"):
+            return await ollama_client.query_model(model.removeprefix("ollama:"), messages, timeout)
+        else:
+            return await openrouter.query_model(model, messages, timeout)
+            
+    if provider == "ollama":
+        # Ensure we strip the prefix if it exists (e.g. from a utility model setting)
+        clean_model = model.removeprefix("ollama:")
+        return await ollama_client.query_model(clean_model, messages, timeout)
+    return await openrouter.query_model(model, messages, timeout)
+
+
+async def query_models_parallel(models: List[str], messages: List[Dict[str, str]]) -> Dict[str, Any]:
+    """Dispatch parallel query to appropriate provider."""
+    provider = get_llm_provider()
+    
+    if provider == "hybrid":
+        # Group models by provider
+        ollama_models = []
+        openrouter_models = []
+        
+        for model in models:
+            if model.startswith("ollama:"):
+                ollama_models.append(model)
+            else:
+                openrouter_models.append(model)
+        
+        tasks = []
+        # Create tasks for Ollama models
+        if ollama_models:
+            # Strip prefix for the actual call, but map back to full ID in result
+            tasks.append(_query_ollama_batch(ollama_models, messages))
+            
+        # Create task for OpenRouter models (it handles its own parallelism)
+        if openrouter_models:
+             tasks.append(openrouter.query_models_parallel(openrouter_models, messages))
+             
+        # Execute
+        results = await asyncio.gather(*tasks)
+        
+        # Merge results
+        combined_results = {}
+        for result_batch in results:
+            combined_results.update(result_batch)
+            
+        return combined_results
+
+    if provider == "ollama":
+        return await ollama_client.query_models_parallel(models, messages)
+    return await openrouter.query_models_parallel(models, messages)
+
+
+async def _query_ollama_batch(prefixed_models: List[str], messages: List[Dict[str, str]]) -> Dict[str, Any]:
+    """Helper to query a batch of Ollama models and restore prefixes."""
+    raw_models = [m.removeprefix("ollama:") for m in prefixed_models]
+    results = await ollama_client.query_models_parallel(raw_models, messages)
+    # Remap back to prefixed keys
+    return {f"ollama:{model}": result for model, result in results.items()}
 
 
 async def stage1_collect_responses(user_query: str, search_context: str = "") -> List[Dict[str, Any]]:
@@ -75,6 +141,8 @@ async def stage2_collect_rankings(
     Returns:
         Tuple of (rankings list, label_to_model mapping)
     """
+    settings = get_settings()
+
     # Filter to only successful responses for ranking
     successful_results = [r for r in stage1_results if not r.get('error')]
 
@@ -93,41 +161,19 @@ async def stage2_collect_rankings(
         for label, result in zip(labels, successful_results)
     ])
 
-    ranking_prompt = f"""You are evaluating different responses to the following question:
-
-Question: {user_query}
-"""
-
+    search_context_block = ""
     if search_context:
-        ranking_prompt += f"\nContext from Web Search:\n{search_context}\n"
+        search_context_block = f"Context from Web Search:\n{search_context}\n"
 
-    ranking_prompt += f"""
-Here are the responses from different models (anonymized):
-
-{responses_text}
-
-Your task:
-1. First, evaluate each response individually. For each response, explain what it does well and what it does poorly.
-2. Then, at the very end of your response, provide a final ranking.
-
-IMPORTANT: Your final ranking MUST be formatted EXACTLY as follows:
-- Start with the line "FINAL RANKING:" (all caps, with colon)
-- Then list the responses from best to worst as a numbered list
-- Each line should be: number, period, space, then ONLY the response label (e.g., "1. Response A")
-- Do not add any other text or explanations in the ranking section
-
-Example of the correct format for your ENTIRE response:
-
-Response A provides good detail on X but misses Y...
-Response B is accurate but lacks depth on Z...
-Response C offers the most comprehensive answer...
-
-FINAL RANKING:
-1. Response C
-2. Response A
-3. Response B
-
-Now provide your evaluation and ranking:"""
+    try:
+        ranking_prompt = settings.stage2_prompt.format(
+            user_query=user_query,
+            responses_text=responses_text,
+            search_context_block=search_context_block
+        )
+    except KeyError as e:
+        print(f"Error formatting Stage 2 prompt: {e}. Using fallback.")
+        ranking_prompt = f"Question: {user_query}\n\n{responses_text}\n\nRank these responses."
 
     messages = [{"role": "user", "content": ranking_prompt}]
 
@@ -177,6 +223,8 @@ async def stage3_synthesize_final(
     Returns:
         Dict with 'model' and 'response' keys
     """
+    settings = get_settings()
+
     # Build comprehensive context for chairman
     stage1_text = "\n\n".join([
         f"Model: {result['model']}\nResponse: {result['response']}"
@@ -188,27 +236,20 @@ async def stage3_synthesize_final(
         for result in stage2_results
     ])
 
-    chairman_prompt = f"""You are the Chairman of an LLM Council. Multiple AI models have provided responses to a user's question, and then ranked each other's responses.
-
-Original Question: {user_query}
-"""
-
+    search_context_block = ""
     if search_context:
-        chairman_prompt += f"\nContext from Web Search:\n{search_context}\n"
+        search_context_block = f"Context from Web Search:\n{search_context}\n"
 
-    chairman_prompt += f"""
-STAGE 1 - Individual Responses:
-{stage1_text}
-
-STAGE 2 - Peer Rankings:
-{stage2_text}
-
-Your task as Chairman is to synthesize all of this information into a single, comprehensive, accurate answer to the user's original question. Consider:
-- The individual responses and their insights
-- The peer rankings and what they reveal about response quality
-- Any patterns of agreement or disagreement
-
-Provide a clear, well-reasoned final answer that represents the council's collective wisdom:"""
+    try:
+        chairman_prompt = settings.stage3_prompt.format(
+            user_query=user_query,
+            stage1_text=stage1_text,
+            stage2_text=stage2_text,
+            search_context_block=search_context_block
+        )
+    except KeyError as e:
+        print(f"Error formatting Stage 3 prompt: {e}. Using fallback.")
+        chairman_prompt = f"Question: {user_query}\n\nSynthesis required."
 
     messages = [{"role": "user", "content": chairman_prompt}]
 
@@ -320,23 +361,28 @@ async def generate_conversation_title(user_query: str) -> str:
     Returns:
         A short title (3-5 words)
     """
-    title_prompt = f"""Generate a very short title (3-5 words maximum) that summarizes the following question.
-The title should be concise and descriptive. Do not use quotes or punctuation in the title.
-
-Question: {user_query}
-
-Title:"""
+    settings = get_settings()
+    try:
+        title_prompt = settings.title_prompt.format(user_query=user_query)
+    except KeyError:
+        title_prompt = f"Title for: {user_query}"
 
     messages = [{"role": "user", "content": title_prompt}]
 
-    # Use gemini-2.5-flash for title generation (fast and cheap)
-    response = await query_model("google/gemini-2.5-flash", messages, timeout=30.0)
+    # Use configured title model
+    model_to_use = settings.title_model
+
+    response = await query_model(model_to_use, messages, timeout=30.0)
 
     if response is None:
         # Fallback to a generic title
         return "New Conversation"
 
-    title = response.get('content', 'New Conversation').strip()
+    content = response.get('content')
+    if not content:
+        return "New Conversation"
+        
+    title = content.strip()
 
     # Clean up the title - remove quotes, limit length
     title = title.strip('"\'')
@@ -358,19 +404,18 @@ async def generate_search_query(user_query: str) -> str:
     Returns:
         Optimized search query string
     """
-    prompt = f"""Extract the key search terms from this question for a web search.
-Return ONLY the search terms (3-6 words), no explanation or formatting.
-Focus on the main topic, entities, and time-relevant terms.
-Remove question words and verbs like "analyze", "explain", "describe".
-
-Question: {user_query}
-
-Search terms:"""
+    settings = get_settings()
+    try:
+        prompt = settings.search_query_prompt.format(user_query=user_query)
+    except KeyError:
+        prompt = f"Search terms for: {user_query}"
 
     messages = [{"role": "user", "content": prompt}]
 
-    # Use gemini-2.5-flash for fast query generation
-    response = await query_model("google/gemini-2.5-flash", messages, timeout=15.0)
+    # Use configured search query model
+    model_to_use = settings.search_query_model
+
+    response = await query_model(model_to_use, messages, timeout=15.0)
 
     if response is None:
         # Fallback: return original query truncated

@@ -6,8 +6,8 @@ from typing import List, Dict, Any, Optional
 from .config import get_openrouter_api_key, OPENROUTER_API_URL
 
 # Retry configuration
-MAX_RETRIES = 3
-INITIAL_RETRY_DELAY = 2.0  # seconds
+MAX_RETRIES = 2
+INITIAL_RETRY_DELAY = 1.0  # seconds
 
 
 async def query_model(
@@ -110,7 +110,9 @@ async def query_models_parallel(
     messages: List[Dict[str, str]]
 ) -> Dict[str, Optional[Dict[str, Any]]]:
     """
-    Query multiple models in parallel.
+    Query multiple models in parallel with batching for rate limit protection.
+    
+    For 6+ models, processes in batches of 3 to avoid hitting rate limits.
 
     Args:
         models: List of OpenRouter model identifiers
@@ -121,7 +123,34 @@ async def query_models_parallel(
     """
     import asyncio
 
-    # Create tasks for all models
+    # For 6+ models, use batching to avoid rate limits
+    BATCH_SIZE = 3
+    if len(models) >= 6:
+        print(f"Batching {len(models)} models into groups of {BATCH_SIZE} to avoid rate limits")
+        results = {}
+        
+        # Process in batches
+        for i in range(0, len(models), BATCH_SIZE):
+            batch = models[i:i + BATCH_SIZE]
+            print(f"Processing batch {i//BATCH_SIZE + 1}: {batch}")
+            
+            # Create tasks for this batch
+            tasks = [query_model(model, messages) for model in batch]
+            
+            # Wait for batch to complete
+            batch_responses = await asyncio.gather(*tasks)
+            
+            # Map batch results
+            for model, response in zip(batch, batch_responses):
+                results[model] = response
+            
+            # Small delay between batches (except for last batch)
+            if i + BATCH_SIZE < len(models):
+                await asyncio.sleep(0.5)
+        
+        return results
+    
+    # For 5 or fewer models, send all at once (original behavior)
     tasks = [query_model(model, messages) for model in models]
 
     # Wait for all to complete
@@ -129,3 +158,4 @@ async def query_models_parallel(
 
     # Map models to their responses
     return {model: response for model, response in zip(models, responses)}
+

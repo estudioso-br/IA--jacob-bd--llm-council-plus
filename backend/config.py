@@ -21,17 +21,37 @@ def get_openrouter_api_key() -> str:
     return os.getenv("OPENROUTER_API_KEY", "")
 
 
+def get_llm_provider() -> str:
+    """Get the active LLM provider (openrouter or ollama)."""
+    from .settings import get_settings
+    return get_settings().llm_provider
+
+
+def get_ollama_base_url() -> str:
+    """Get Ollama base URL from settings."""
+    from .settings import get_settings
+    return get_settings().ollama_base_url
+
+
 def get_council_models() -> list:
-    """Get council models from settings."""
+    """Get council models from settings based on active provider."""
     from .settings import get_settings, DEFAULT_COUNCIL_MODELS
     settings = get_settings()
+    if settings.llm_provider == "ollama":
+        return settings.ollama_council_models
+    if settings.llm_provider == "hybrid":
+        return settings.hybrid_council_models
     return settings.council_models or DEFAULT_COUNCIL_MODELS
 
 
 def get_chairman_model() -> str:
-    """Get chairman model from settings."""
+    """Get chairman model from settings based on active provider."""
     from .settings import get_settings, DEFAULT_CHAIRMAN_MODEL
     settings = get_settings()
+    if settings.llm_provider == "ollama":
+        return settings.ollama_chairman_model
+    if settings.llm_provider == "hybrid":
+        return settings.hybrid_chairman_model
     return settings.chairman_model or DEFAULT_CHAIRMAN_MODEL
 
 

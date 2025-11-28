@@ -181,20 +181,33 @@ async def send_message_stream(conversation_id: str, request: SendMessageRequest)
                 # Run search in thread to avoid blocking
                 search_context = await asyncio.to_thread(perform_web_search, search_query, 5, provider, settings.full_content_results)
                 yield f"data: {json.dumps({'type': 'search_complete', 'data': {'search_query': search_query, 'search_context': search_context, 'provider': provider.value}})}\n\n"
+                await asyncio.sleep(0.05)
 
             # Stage 1: Collect responses
             yield f"data: {json.dumps({'type': 'stage1_start'})}\n\n"
+            await asyncio.sleep(0.05)
             stage1_results = await stage1_collect_responses(request.content, search_context)
             yield f"data: {json.dumps({'type': 'stage1_complete', 'data': stage1_results})}\n\n"
+            await asyncio.sleep(0.05)
+
+            # Check if any models responded successfully in Stage 1
+            if not any(r for r in stage1_results if not r.get('error')):
+                error_msg = 'All models failed to respond in Stage 1, likely due to rate limits or API errors. Please try again or adjust your model selection.'
+                storage.add_error_message(conversation_id, error_msg)
+                yield f"data: {json.dumps({'type': 'error', 'message': error_msg})}\n\n"
+                return # Stop further processing
 
             # Stage 2: Collect rankings
             yield f"data: {json.dumps({'type': 'stage2_start'})}\n\n"
+            await asyncio.sleep(0.05)
             stage2_results, label_to_model = await stage2_collect_rankings(request.content, stage1_results, search_context)
             aggregate_rankings = calculate_aggregate_rankings(stage2_results, label_to_model)
             yield f"data: {json.dumps({'type': 'stage2_complete', 'data': stage2_results, 'metadata': {'label_to_model': label_to_model, 'aggregate_rankings': aggregate_rankings, 'search_query': search_query, 'search_context': search_context}})}\n\n"
+            await asyncio.sleep(0.05)
 
             # Stage 3: Synthesize final answer
             yield f"data: {json.dumps({'type': 'stage3_start'})}\n\n"
+            await asyncio.sleep(0.05)
             stage3_result = await stage3_synthesize_final(request.content, stage1_results, stage2_results, search_context)
             yield f"data: {json.dumps({'type': 'stage3_complete', 'data': stage3_result})}\n\n"
 
@@ -224,6 +237,8 @@ async def send_message_stream(conversation_id: str, request: SendMessageRequest)
             yield f"data: {json.dumps({'type': 'complete'})}\n\n"
 
         except Exception as e:
+            # Save error to conversation history
+            storage.add_error_message(conversation_id, f"Error: {str(e)}")
             # Send error event
             yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
 
@@ -240,12 +255,30 @@ async def send_message_stream(conversation_id: str, request: SendMessageRequest)
 class UpdateSettingsRequest(BaseModel):
     """Request to update settings."""
     search_provider: Optional[str] = None
+    llm_provider: Optional[str] = None
+    ollama_base_url: Optional[str] = None
+    ollama_council_models: Optional[List[str]] = None
+    ollama_chairman_model: Optional[str] = None
+    hybrid_council_models: Optional[List[str]] = None
+    hybrid_chairman_model: Optional[str] = None
     full_content_results: Optional[int] = None
     tavily_api_key: Optional[str] = None
     brave_api_key: Optional[str] = None
     openrouter_api_key: Optional[str] = None
     council_models: Optional[List[str]] = None
     chairman_model: Optional[str] = None
+    
+    # Utility Models
+    search_query_model: Optional[str] = None
+    title_model: Optional[str] = None
+    
+    # System Prompts
+    stage1_prompt: Optional[str] = None
+    stage2_prompt: Optional[str] = None
+    stage3_prompt: Optional[str] = None
+    title_prompt: Optional[str] = None
+    search_query_prompt: Optional[str] = None
+
 
 
 class TestTavilyRequest(BaseModel):
@@ -259,21 +292,52 @@ async def get_app_settings():
     settings = get_settings()
     return {
         "search_provider": settings.search_provider,
+        "llm_provider": settings.llm_provider,
+        "ollama_base_url": settings.ollama_base_url,
+        "ollama_council_models": settings.ollama_council_models,
+        "ollama_chairman_model": settings.ollama_chairman_model,
+        "hybrid_council_models": settings.hybrid_council_models,
+        "hybrid_chairman_model": settings.hybrid_chairman_model,
         "full_content_results": settings.full_content_results,
         "tavily_api_key_set": bool(settings.tavily_api_key),
         "brave_api_key_set": bool(settings.brave_api_key),
         "openrouter_api_key_set": bool(settings.openrouter_api_key),
         "council_models": settings.council_models,
         "chairman_model": settings.chairman_model,
+        # Utility Models
+        "search_query_model": settings.search_query_model,
+        "title_model": settings.title_model,
+        # Prompts
+        "stage1_prompt": settings.stage1_prompt,
+        "stage2_prompt": settings.stage2_prompt,
+        "stage3_prompt": settings.stage3_prompt,
+        "title_prompt": settings.title_prompt,
+        "search_query_prompt": settings.search_query_prompt,
     }
+
 
 
 @app.get("/api/settings/defaults")
 async def get_default_settings():
     """Get default model settings."""
+    from .prompts import (
+        STAGE1_PROMPT_DEFAULT,
+        STAGE2_PROMPT_DEFAULT,
+        STAGE3_PROMPT_DEFAULT,
+        TITLE_PROMPT_DEFAULT,
+        SEARCH_QUERY_PROMPT_DEFAULT
+    )
+    from .settings import DEFAULT_SEARCH_QUERY_MODEL, DEFAULT_TITLE_MODEL
     return {
         "council_models": DEFAULT_COUNCIL_MODELS,
         "chairman_model": DEFAULT_CHAIRMAN_MODEL,
+        "search_query_model": DEFAULT_SEARCH_QUERY_MODEL,
+        "title_model": DEFAULT_TITLE_MODEL,
+        "stage1_prompt": STAGE1_PROMPT_DEFAULT,
+        "stage2_prompt": STAGE2_PROMPT_DEFAULT,
+        "stage3_prompt": STAGE3_PROMPT_DEFAULT,
+        "title_prompt": TITLE_PROMPT_DEFAULT,
+        "search_query_prompt": SEARCH_QUERY_PROMPT_DEFAULT,
     }
 
 
@@ -293,6 +357,43 @@ async def update_app_settings(request: UpdateSettingsRequest):
                 detail=f"Invalid search provider. Must be one of: {[p.value for p in SearchProvider]}"
             )
 
+    if request.llm_provider is not None:
+        updates["llm_provider"] = request.llm_provider
+    if request.ollama_base_url is not None:
+        updates["ollama_base_url"] = request.ollama_base_url
+        
+    if request.ollama_council_models is not None:
+        if len(request.ollama_council_models) < 2:
+             raise HTTPException(
+                status_code=400,
+                detail="At least two council models must be selected for Ollama"
+            )
+        if len(request.ollama_council_models) > 8:
+             raise HTTPException(
+                status_code=400,
+                detail="Maximum of 8 council models allowed"
+            )
+        updates["ollama_council_models"] = request.ollama_council_models
+        
+    if request.ollama_chairman_model is not None:
+        updates["ollama_chairman_model"] = request.ollama_chairman_model
+
+    if request.hybrid_council_models is not None:
+        if len(request.hybrid_council_models) < 2:
+             raise HTTPException(
+                status_code=400,
+                detail="At least two council models must be selected for Hybrid mode"
+            )
+        if len(request.hybrid_council_models) > 8:
+             raise HTTPException(
+                status_code=400,
+                detail="Maximum of 8 council models allowed"
+            )
+        updates["hybrid_council_models"] = request.hybrid_council_models
+
+    if request.hybrid_chairman_model is not None:
+        updates["hybrid_chairman_model"] = request.hybrid_chairman_model
+
     if request.full_content_results is not None:
         # Validate range
         if request.full_content_results < 0 or request.full_content_results > 10:
@@ -301,6 +402,18 @@ async def update_app_settings(request: UpdateSettingsRequest):
                 detail="full_content_results must be between 0 and 10"
             )
         updates["full_content_results"] = request.full_content_results
+
+    # Prompt updates
+    if request.stage1_prompt is not None:
+        updates["stage1_prompt"] = request.stage1_prompt
+    if request.stage2_prompt is not None:
+        updates["stage2_prompt"] = request.stage2_prompt
+    if request.stage3_prompt is not None:
+        updates["stage3_prompt"] = request.stage3_prompt
+    if request.title_prompt is not None:
+        updates["title_prompt"] = request.title_prompt
+    if request.search_query_prompt is not None:
+        updates["search_query_prompt"] = request.search_query_prompt
 
     if request.tavily_api_key is not None:
         updates["tavily_api_key"] = request.tavily_api_key
@@ -318,16 +431,27 @@ async def update_app_settings(request: UpdateSettingsRequest):
         updates["openrouter_api_key"] = request.openrouter_api_key
 
     if request.council_models is not None:
-        # Validate that at least one model is selected
-        if len(request.council_models) == 0:
+        # Validate that at least two models are selected
+        if len(request.council_models) < 2:
             raise HTTPException(
                 status_code=400,
-                detail="At least one council model must be selected"
+                detail="At least two council models must be selected"
+            )
+        if len(request.council_models) > 8:
+            raise HTTPException(
+                status_code=400,
+                detail="Maximum of 8 council models allowed"
             )
         updates["council_models"] = request.council_models
 
     if request.chairman_model is not None:
         updates["chairman_model"] = request.chairman_model
+
+    if request.search_query_model is not None:
+        updates["search_query_model"] = request.search_query_model
+
+    if request.title_model is not None:
+        updates["title_model"] = request.title_model
 
     if updates:
         settings = update_settings(**updates)
@@ -336,6 +460,10 @@ async def update_app_settings(request: UpdateSettingsRequest):
 
     return {
         "search_provider": settings.search_provider,
+        "llm_provider": settings.llm_provider,
+        "ollama_base_url": settings.ollama_base_url,
+        "ollama_council_models": settings.ollama_council_models,
+        "ollama_chairman_model": settings.ollama_chairman_model,
         "tavily_api_key_set": bool(settings.tavily_api_key),
         "brave_api_key_set": bool(settings.brave_api_key),
         "openrouter_api_key_set": bool(settings.openrouter_api_key),
@@ -410,7 +538,77 @@ async def test_brave_api(request: TestBraveRequest):
 
 class TestOpenRouterRequest(BaseModel):
     """Request to test OpenRouter API key."""
-    api_key: str
+    api_key: Optional[str] = None
+
+
+class TestOllamaRequest(BaseModel):
+    """Request to test Ollama connection."""
+    base_url: str
+
+
+@app.get("/api/ollama/tags")
+async def get_ollama_tags(base_url: Optional[str] = None):
+    """Fetch available models from Ollama."""
+    import httpx
+    from .config import get_ollama_base_url
+    
+    if not base_url:
+        base_url = get_ollama_base_url()
+        
+    if base_url.endswith('/'):
+        base_url = base_url[:-1]
+        
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(f"{base_url}/api/tags")
+            
+            if response.status_code != 200:
+                return {"models": [], "error": f"Ollama API error: {response.status_code}"}
+                
+            data = response.json()
+            models = []
+            for model in data.get("models", []):
+                models.append({
+                    "id": model.get("name"),
+                    "name": model.get("name"),
+                    # Ollama doesn't return context length in tags
+                    "context_length": None,
+                    "is_free": True,
+                    "modified_at": model.get("modified_at")
+                })
+                
+            # Sort by modified_at (newest first), fallback to name
+            models.sort(key=lambda x: x.get("modified_at", ""), reverse=True)
+            return {"models": models}
+            
+    except httpx.ConnectError:
+        return {"models": [], "error": "Could not connect to Ollama. Is it running?"}
+    except Exception as e:
+        return {"models": [], "error": str(e)}
+
+
+@app.post("/api/settings/test-ollama")
+async def test_ollama_connection(request: TestOllamaRequest):
+    """Test connection to Ollama instance."""
+    import httpx
+    
+    base_url = request.base_url
+    if base_url.endswith('/'):
+        base_url = base_url[:-1]
+        
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.get(f"{base_url}/api/tags")
+            
+            if response.status_code == 200:
+                return {"success": True, "message": "Successfully connected to Ollama"}
+            else:
+                return {"success": False, "message": f"Ollama API error: {response.status_code}"}
+                
+    except httpx.ConnectError:
+        return {"success": False, "message": "Could not connect to Ollama. Is it running at this URL?"}
+    except Exception as e:
+        return {"success": False, "message": str(e)}
 
 
 @app.get("/api/models")
@@ -463,13 +661,20 @@ async def get_openrouter_models():
 async def test_openrouter_api(request: TestOpenRouterRequest):
     """Test OpenRouter API key with a simple request."""
     import httpx
+    from .config import get_openrouter_api_key
+
+    # Use provided key or fall back to saved key
+    api_key = request.api_key if request.api_key else get_openrouter_api_key()
+    
+    if not api_key:
+        return {"success": False, "message": "No API key provided or configured"}
 
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
             response = await client.get(
                 "https://openrouter.ai/api/v1/models",
                 headers={
-                    "Authorization": f"Bearer {request.api_key}",
+                    "Authorization": f"Bearer {api_key}",
                 },
             )
 

@@ -15,8 +15,9 @@
   background: white;
   border-radius: 12px;
   width: 90%;
-  max-width: 500px;
-  max-height: 80vh;
+  max-width: 700px;
+  /* Increased from 500px to prevent cutoff */
+  max-height: 85vh;
   display: flex;
   flex-direction: column;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
@@ -81,7 +82,20 @@
 .provider-options {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
+}
+
+.provider-option-container {
+  border: 1px solid #d0d0d0;
+  border-radius: 8px;
+  overflow: hidden;
+  transition: all 0.2s;
+}
+
+.provider-option-container.selected {
+  border-color: #4a90e2;
+  background: #f5f9ff;
+  box-shadow: 0 0 0 1px #4a90e2;
 }
 
 .provider-option {
@@ -89,24 +103,21 @@
   align-items: flex-start;
   gap: 12px;
   padding: 12px;
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
   cursor: pointer;
-  transition: all 0.2s;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .provider-option:hover {
-  border-color: #4a90e2;
   background: #f8fafc;
 }
 
 .provider-option.selected {
-  border-color: #4a90e2;
-  background: #e3f2fd;
+  /* Styles handled by .provider-option-container.selected */
 }
 
 .provider-option input[type="radio"] {
-  margin-top: 2px;
+  margin-top: 4px;
 }
 
 .provider-info {
@@ -124,6 +135,20 @@
 .provider-description {
   font-size: 12px;
   color: #666;
+}
+
+.setting-description {
+  font-size: 13px;
+  color: #666;
+  margin: 4px 0 12px 0;
+  line-height: 1.4;
+}
+
+.inline-api-key-section {
+  padding: 0 12px 12px 12px;
+  margin-top: 8px;
+  animation: fadeIn 0.3s ease;
+  border-radius: 8px;
 }
 
 .api-key-section {
@@ -146,6 +171,36 @@
   gap: 8px;
 }
 
+.inline-api-key-section input {
+  flex: 1;
+  /* max-width removed to match user example */
+  padding: 10px 12px;
+  /* Slightly larger padding for better sizing */
+  border: 1px solid #d0d0d0;
+  border-radius: 6px;
+  font-size: 14px;
+  /* Slightly larger font */
+  background: white;
+  letter-spacing: 1px;
+  /* Give the dots some breathing room */
+}
+
+.inline-api-key-section input::placeholder {
+  letter-spacing: normal;
+  /* Reset spacing for placeholder text */
+}
+
+.inline-api-key-section input.key-configured {
+  border-color: #a5d6a7;
+  background: #f1f8f2;
+}
+
+.inline-api-key-section input:focus {
+  outline: none;
+  border-color: #4a90e2;
+  box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.2);
+}
+
 .api-key-section input {
   flex: 1;
   padding: 10px 12px;
@@ -153,6 +208,11 @@
   border-radius: 6px;
   font-size: 14px;
   box-sizing: border-box;
+}
+
+.api-key-section input.key-configured {
+  border-color: #a5d6a7;
+  background: #f1f8f2;
 }
 
 .api-key-section input:focus {
@@ -229,6 +289,47 @@
   background: #e8f5e9;
   color: #2e7d32;
   border: 1px solid #a5d6a7;
+}
+
+.ollama-auto-status {
+  margin-top: 12px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  background: white;
+  border: 1px solid #e0e0e0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.status-separator {
+  color: #ccc;
+  margin: 0 4px;
+}
+
+.status-indicator {
+  font-size: 10px;
+  line-height: 1;
+}
+
+.status-indicator.connected {
+  color: #2e7d32;
+}
+
+.status-indicator.disconnected {
+  color: #999;
+}
+
+.status-text {
+  color: #333;
+  font-weight: 500;
+}
+
+.status-time {
+  color: #666;
+  font-weight: 400;
+  font-size: 12px;
 }
 
 .settings-footer {
@@ -342,6 +443,8 @@
   color: #666;
   cursor: pointer;
   transition: all 0.2s;
+  margin-right: auto;
+  /* Push to the left in footer */
 }
 
 .reset-defaults-button:hover {
@@ -369,24 +472,60 @@
 .council-members {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
+  /* Reduced from 8px */
 }
 
 .council-member-row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  margin-bottom: 4px;
+  /* Reduced from 8px */
+  background-color: var(--surface-color);
+  padding: 8px;
+  /* Reduced from 10px */
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  gap: 8px;
+  /* Reduced from 12px */
 }
 
-.member-label {
-  font-size: 13px;
+.model-type-toggle {
+  display: flex;
+  /* Removed margin-right/bottom since we use gap now */
+  background-color: var(--background-color);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 2px;
+  flex-shrink: 0;
+}
+
+.type-btn {
+  background: none;
+  border: none;
+  padding: 4px 10px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  color: var(--text-secondary);
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.type-btn.active {
+  background-color: var(--primary-color);
+  color: white;
   font-weight: 500;
-  color: #555;
-  min-width: 80px;
+}
+
+.type-btn:hover:not(.active) {
+  background-color: rgba(255, 255, 255, 0.05);
 }
 
 .model-select {
   flex: 1;
+  /* Restore standard flex behavior */
+  min-width: 0;
+  /* Allow shrinking if absolutely necessary */
   padding: 10px 12px;
   border: 1px solid #d0d0d0;
   border-radius: 6px;
@@ -402,13 +541,19 @@
 }
 
 .remove-member-button {
-  width: 32px;
-  height: 32px;
-  border: 1px solid #d0d0d0;
+  width: 28px;
+  /* Slightly smaller */
+  height: 28px;
+  /* Slightly smaller */
+  border: 1px solid var(--error-color);
+  /* Red border */
   border-radius: 6px;
-  background: white;
-  color: #666;
-  font-size: 18px;
+  background: var(--error-color);
+  /* Red background */
+  color: white;
+  /* White 'x' */
+  font-size: 16px;
+  /* Slightly smaller font */
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -417,9 +562,9 @@
 }
 
 .remove-member-button:hover:not(:disabled) {
-  background: #ffebee;
-  border-color: #f44336;
-  color: #f44336;
+  background: var(--error-color-dark);
+  border-color: var(--error-color-dark);
+  color: white;
 }
 
 .remove-member-button:disabled {
@@ -458,6 +603,28 @@
   border-radius: 6px;
   color: #856404;
   font-size: 13px;
+}
+
+.council-size-warning {
+  margin-top: 12px;
+  padding: 10px 12px;
+  background: #fff3cd;
+  border: 1px solid #ffc107;
+  border-radius: 6px;
+  color: #856404;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.council-size-info {
+  margin-top: 12px;
+  padding: 10px 12px;
+  background: #e8f5e9;
+  border: 1px solid #a5d6a7;
+  border-radius: 6px;
+  color: #2e7d32;
+  font-size: 13px;
+  font-weight: 500;
 }
 
 /* Chairman Selection Styles */
@@ -542,4 +709,126 @@
   font-size: 14px;
   font-weight: 600;
   color: #333;
+}
+
+/* Utility Models Styles */
+.model-selector-group {
+  margin-bottom: 16px;
+}
+
+.model-selector-group label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: #333;
+  margin-bottom: 6px;
+}
+
+.model-selector-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.model-select {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid #d0d0d0;
+  border-radius: 6px;
+  font-size: 14px;
+  background: #ffffff;
+}
+
+/* System Prompts Styles */
+.prompts-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 8px;
+  overflow-x: auto;
+}
+
+.prompt-tab {
+  background: none;
+  border: none;
+  padding: 6px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  border-radius: 6px;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+
+.prompt-tab:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+  color: var(--text-primary);
+}
+
+.prompt-tab.active {
+  background-color: var(--primary-color);
+  color: white;
+  font-weight: 500;
+}
+
+.prompt-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.prompt-content label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.prompt-help {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.prompt-help code {
+  background: #f0f0f0;
+  padding: 2px 4px;
+  border-radius: 4px;
+  font-family: monospace;
+}
+
+.prompt-content textarea {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-family: monospace;
+  font-size: 13px;
+  resize: vertical;
+  background-color: var(--background-color);
+  color: var(--text-primary);
+  line-height: 1.4;
+}
+
+.prompt-content textarea:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.2);
+}
+
+.reset-prompt-btn {
+  align-self: flex-start;
+  background: none;
+  border: 1px solid var(--border-color);
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.reset-prompt-btn:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+  color: var(--text-primary);
 }
