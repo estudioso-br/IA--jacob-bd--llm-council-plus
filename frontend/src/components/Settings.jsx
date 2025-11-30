@@ -792,7 +792,7 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama }) {
     // Group models by provider
     const grouped = models.reduce((acc, model) => {
       // Determine provider
-      let provider = model.provider || 'Other';
+      let provider = model.provider || 'OpenRouter (Other)';
       if (model.id.startsWith('ollama:')) provider = 'Local (Ollama)';
       else if (model.id.startsWith('openai:')) provider = 'OpenAI';
       else if (model.id.startsWith('anthropic:')) provider = 'Anthropic';
@@ -808,7 +808,7 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama }) {
     }, {});
 
     // Sort providers
-    const providerOrder = ['Google', 'Anthropic', 'OpenAI', 'Mistral', 'DeepSeek', 'xAI', 'Meta Llama', 'Local (Ollama)', 'Other'];
+    const providerOrder = ['Google', 'Anthropic', 'OpenAI', 'Mistral', 'DeepSeek', 'xAI', 'Meta Llama', 'Local (Ollama)', 'OpenRouter (Other)'];
     const sortedProviders = Object.keys(grouped).sort((a, b) => {
       const indexA = providerOrder.indexOf(a);
       const indexB = providerOrder.indexOf(b);
