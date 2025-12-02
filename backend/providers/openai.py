@@ -14,7 +14,7 @@ class OpenAIProvider(LLMProvider):
         settings = get_settings()
         return settings.openai_api_key or ""
 
-    async def query(self, model_id: str, messages: List[Dict[str, str]], timeout: float = 120.0) -> Dict[str, Any]:
+    async def query(self, model_id: str, messages: List[Dict[str, str]], timeout: float = 120.0, temperature: float = 0.7) -> Dict[str, Any]:
         api_key = self._get_api_key()
         if not api_key:
             return {"error": True, "error_message": "OpenAI API key not configured"}
@@ -33,7 +33,7 @@ class OpenAIProvider(LLMProvider):
                     json={
                         "model": model,
                         "messages": messages,
-                        "temperature": 0.7
+                        "temperature": 1.0 if any(x in model for x in ["gpt-5.1", "o1-", "o3-"]) else temperature
                     }
                 )
                 

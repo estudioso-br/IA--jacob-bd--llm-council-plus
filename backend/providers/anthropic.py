@@ -14,7 +14,7 @@ class AnthropicProvider(LLMProvider):
         settings = get_settings()
         return settings.anthropic_api_key or ""
 
-    async def query(self, model_id: str, messages: List[Dict[str, str]], timeout: float = 120.0) -> Dict[str, Any]:
+    async def query(self, model_id: str, messages: List[Dict[str, str]], timeout: float = 120.0, temperature: float = 0.7) -> Dict[str, Any]:
         api_key = self._get_api_key()
         if not api_key:
             return {"error": True, "error_message": "Anthropic API key not configured"}
@@ -36,7 +36,7 @@ class AnthropicProvider(LLMProvider):
                     "model": model,
                     "messages": filtered_messages,
                     "max_tokens": 4096,
-                    "temperature": 0.7
+                    "temperature": temperature
                 }
                 if system_message:
                     payload["system"] = system_message

@@ -103,6 +103,11 @@ class Settings(BaseModel):
     council_models: List[str] = DEFAULT_COUNCIL_MODELS.copy()
     chairman_model: str = DEFAULT_CHAIRMAN_MODEL
     
+    # Temperature Settings
+    council_temperature: float = 0.5
+    chairman_temperature: float = 0.4
+    stage2_temperature: float = 0.3  # Lower for consistent ranking output
+    
     # Remote/Local filters
     council_member_filters: Optional[Dict[int, str]] = None
     chairman_filter: Optional[str] = None

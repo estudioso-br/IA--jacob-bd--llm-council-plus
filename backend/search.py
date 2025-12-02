@@ -8,8 +8,137 @@ import httpx
 import os
 import time
 import asyncio
+import yake
 
 logger = logging.getLogger(__name__)
+
+# YAKE keyword extractor configuration
+_keyword_extractor: Optional[yake.KeywordExtractor] = None
+
+
+def get_keyword_extractor() -> yake.KeywordExtractor:
+    """Get or create YAKE keyword extractor (singleton for efficiency)."""
+    global _keyword_extractor
+    if _keyword_extractor is None:
+        _keyword_extractor = yake.KeywordExtractor(
+            lan="en",           # Language
+            n=3,                # Max n-gram size (up to 3-word phrases)
+            dedupLim=0.3,       # Stricter deduplication
+            dedupFunc='seqm',   # Sequence matcher for dedup
+            top=20,             # Extract more candidates, we'll filter
+            features=None       # Use default features
+        )
+    return _keyword_extractor
+
+
+# Noise words/phrases to filter out from extracted keywords
+NOISE_WORDS = {
+    # Action words from prompts
+    'act', 'based', 'please', 'help', 'want', 'need', 'know', 'tell',
+    'explain', 'describe', 'give', 'provide', 'show', 'make', 'create',
+    # Analysis terms
+    'question', 'answer', 'think', 'believe', 'consider', 'evaluate',
+    'analyze', 'compare', 'discuss', 'strongest', 'arguments', 'theory',
+    # Time/context noise
+    'current', 'late', 'early', 'recent', 'today', 'now',
+    # Common filler
+    'like', 'using', 'use', 'way', 'things', 'something',
+    # Prepositions/articles (YAKE sometimes includes these)
+    'the', 'a', 'an', 'in', 'on', 'at', 'to', 'for', 'of', 'and', 'or'
+}
+
+# Phrases that should be filtered entirely
+NOISE_PHRASES = {
+    'market in late', 'analyst and evaluate', 'evaluate the theory',
+    'compare the current', 'based on the', 'act as a', 'tell me about',
+    'current market', 'late 2025', 'early 2025', 'in 2025', 'in 2024'
+}
+
+# Role-play job titles to filter (common in "act as a..." prompts)
+ROLE_PLAY_TITLES = {
+    'financial analyst', 'data analyst', 'business analyst', 'market analyst',
+    'research analyst', 'investment analyst', 'senior analyst', 'junior analyst',
+    'expert', 'specialist', 'consultant', 'advisor', 'professor', 'scientist',
+    'economist', 'strategist', 'researcher', 'journalist', 'writer', 'editor'
+}
+
+
+def extract_search_keywords(query: str, max_keywords: int = 6) -> str:
+    """
+    Extract keywords from a user query using YAKE.
+    Returns a space-separated string of keywords suitable for search engines.
+
+    Args:
+        query: The user's natural language query
+        max_keywords: Maximum number of keywords to extract
+
+    Returns:
+        Optimized search query string
+    """
+    if not query or len(query.strip()) < 10:
+        # Query too short, use as-is
+        return query.strip()
+
+    try:
+        extractor = get_keyword_extractor()
+        # YAKE returns list of (keyword, score) tuples, lower score = more important
+        keywords = extractor.extract_keywords(query)
+
+        if not keywords:
+            return query.strip()
+
+        # Filter and clean keywords
+        clean_keywords = []
+        for kw, score in keywords:
+            kw_lower = kw.lower()
+
+            # Skip known noise phrases
+            if kw_lower in NOISE_PHRASES:
+                continue
+
+            # Skip role-play job titles
+            if kw_lower in ROLE_PLAY_TITLES:
+                continue
+
+            # Skip single-word noise
+            words = kw_lower.split()
+            if len(words) == 1 and words[0] in NOISE_WORDS:
+                continue
+
+            # Skip phrases where most words are noise
+            non_noise_words = [w for w in words if w not in NOISE_WORDS]
+            if len(non_noise_words) == 0:
+                continue
+            if len(words) > 1 and len(non_noise_words) < len(words) * 0.4:
+                continue
+
+            clean_keywords.append(kw)
+            if len(clean_keywords) >= max_keywords:
+                break
+
+        # Remove keywords that are substrings of other keywords
+        final_keywords = []
+        for kw in clean_keywords:
+            kw_lower = kw.lower()
+            # Check if this keyword is a substring of any other keyword
+            is_substring = False
+            for other in clean_keywords:
+                if kw != other and kw_lower in other.lower():
+                    is_substring = True
+                    break
+            if not is_substring:
+                final_keywords.append(kw)
+
+        # Join into search query
+        search_query = " ".join(final_keywords)
+
+        logger.info(f"YAKE extracted keywords: '{search_query}' from query: '{query[:50]}...'")
+
+        return search_query if search_query else query.strip()
+
+    except Exception as e:
+        logger.warning(f"YAKE keyword extraction failed: {e}, using original query")
+        return query.strip()
 
 # Rate limit handling
 MAX_RETRIES = 2
@@ -50,7 +179,7 @@ async def perform_web_search(
     max_results: int = 5,
     provider: SearchProvider = SearchProvider.DUCKDUCKGO,
     full_content_results: int = 3
-) -> str:
+) -> Dict[str, str]:
     """
     Perform a web search using the specified provider.
 
@@ -61,19 +190,27 @@ async def perform_web_search(
         full_content_results: Number of top results to fetch full content for (0 to disable)
 
     Returns:
-        Formatted string with search results
+        Dict with 'results' (formatted string) and 'extracted_query' (keywords used)
     """
+    # Extract keywords from user query for better search results
+    extracted_query = extract_search_keywords(query)
+
     try:
         if provider == SearchProvider.TAVILY:
-            return await _search_tavily(query, max_results)
+            results = await _search_tavily(extracted_query, max_results)
         elif provider == SearchProvider.BRAVE:
-            return await _search_brave(query, max_results, full_content_results)
+            results = await _search_brave(extracted_query, max_results, full_content_results)
         else:
             # DuckDuckGo's DDGS library is synchronous, so run in thread
-            return await asyncio.to_thread(_search_duckduckgo, query, max_results, full_content_results)
+            results = await asyncio.to_thread(_search_duckduckgo, extracted_query, max_results, full_content_results)
+
+        return {"results": results, "extracted_query": extracted_query}
     except Exception as e:
         logger.error(f"Error performing web search with {provider}: {str(e)}")
-        return "[System Note: Web search was attempted but failed. Please answer based on your internal knowledge.]"
+        return {
+            "results": "[System Note: Web search was attempted but failed. Please answer based on your internal knowledge.]",
+            "extracted_query": extracted_query
+        }
 
 
 def _search_duckduckgo(query: str, max_results: int = 5, full_content_results: int = 3) -> str:

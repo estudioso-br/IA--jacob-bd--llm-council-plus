@@ -32,12 +32,17 @@ function parseSearchResults(searchContext) {
   return results;
 }
 
-export default function SearchContext({ searchQuery, searchContext }) {
+export default function SearchContext({ searchQuery, extractedQuery, searchContext }) {
   const [isExpanded, setIsExpanded] = useState(false);
 
   if (!searchContext) return null;
 
   const sources = parseSearchResults(searchContext);
+
+  // Truncate display query for preview
+  const displayQuery = searchQuery && searchQuery.length > 60
+    ? searchQuery.substring(0, 60) + '...'
+    : searchQuery;
 
   return (
     <div className="search-context">
@@ -49,7 +54,12 @@ export default function SearchContext({ searchQuery, searchContext }) {
         <span className="search-icon">🔍</span>
         <span className="search-label">Web Search</span>
         {searchQuery && (
-          <span className="search-query-preview">"{searchQuery}"</span>
+          <span
+            className="search-query-preview"
+            title={extractedQuery ? `Search terms sent: ${extractedQuery}` : searchQuery}
+          >
+            "{displayQuery}"
+          </span>
         )}
         <span className="accordion-arrow">{isExpanded ? '▼' : '▶'}</span>
       </button>

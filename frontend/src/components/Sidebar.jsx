@@ -50,7 +50,7 @@ export default function Sidebar({
         </button>
       </div>
 
-      {/* Prominent New Council Button */}
+      {/* Prominent New Discussion Button */}
       <div className="sidebar-actions">
         <button
           className="new-council-btn"
@@ -58,7 +58,7 @@ export default function Sidebar({
           disabled={isLoading}
         >
           <span className="btn-icon">+</span>
-          <span className="btn-text">New Council</span>
+          <span className="btn-text">New Discussion</span>
         </button>
       </div>
 

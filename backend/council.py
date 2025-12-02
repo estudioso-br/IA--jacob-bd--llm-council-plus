@@ -44,10 +44,10 @@ def get_provider_for_model(model_id: str) -> Any:
     return PROVIDERS["openrouter"]
 
 
-async def query_model(model: str, messages: List[Dict[str, str]], timeout: float = 120.0) -> Dict[str, Any]:
+async def query_model(model: str, messages: List[Dict[str, str]], timeout: float = 120.0, temperature: float = 0.7) -> Dict[str, Any]:
     """Dispatch query to appropriate provider."""
     provider = get_provider_for_model(model)
-    return await provider.query(model, messages, timeout)
+    return await provider.query(model, messages, timeout, temperature)
 
 
 async def query_models_parallel(models: List[str], messages: List[Dict[str, str]]) -> Dict[str, Any]:
@@ -93,17 +93,28 @@ async def stage1_collect_responses(user_query: str, search_context: str = "", re
         - First yield: total_models (int)
         - Subsequent yields: Individual model results (dict)
     """
+    settings = get_settings()
+
+    # Build search context block if search results provided
+    search_context_block = ""
     if search_context:
-        prompt = f"""You have access to the following real-time web search results.
-You MUST use this information to answer the question, even if it contradicts your internal knowledge cutoff.
-Do not say "I cannot access real-time information" or "My knowledge is limited to..." because you have the search results right here.
+        from .prompts import STAGE1_SEARCH_CONTEXT_TEMPLATE
+        search_context_block = STAGE1_SEARCH_CONTEXT_TEMPLATE.format(search_context=search_context)
 
-Search Results:
-{search_context}
+    # Use customizable Stage 1 prompt
+    try:
+        prompt_template = settings.stage1_prompt
+        if not prompt_template:
+            from .prompts import STAGE1_PROMPT_DEFAULT
+            prompt_template = STAGE1_PROMPT_DEFAULT
 
-Question: {user_query}"""
-    else:
-        prompt = user_query
+        prompt = prompt_template.format(
+            user_query=user_query,
+            search_context_block=search_context_block
+        )
+    except (KeyError, AttributeError, TypeError) as e:
+        logger.warning(f"Error formatting Stage 1 prompt: {e}. Using fallback.")
+        prompt = f"{search_context_block}Question: {user_query}" if search_context_block else user_query
 
     messages = [{"role": "user", "content": prompt}]
 
@@ -113,9 +124,11 @@ Question: {user_query}"""
     # Yield total count first
     yield len(models)
 
+    council_temp = settings.council_temperature
+
     async def _query_safe(m: str):
         try:
-            return m, await query_model(m, messages)
+            return m, await query_model(m, messages, temperature=council_temp)
         except Exception as e:
             return m, {"error": True, "error_message": str(e)}
 
@@ -239,9 +252,12 @@ async def stage2_collect_rankings(
     # (no point asking failed models to rank - they'll just fail again)
     successful_models = [r['model'] for r in successful_results]
 
+    # Use dedicated Stage 2 temperature (lower for consistent ranking output)
+    stage2_temp = settings.stage2_temperature
+
     async def _query_safe(m: str):
         try:
-            return m, await query_model(m, messages)
+            return m, await query_model(m, messages, temperature=stage2_temp)
         except Exception as e:
             return m, {"error": True, "error_message": str(e)}
 
@@ -363,9 +379,10 @@ async def stage3_synthesize_final(
 
     # Query the chairman model with error handling
     chairman_model = get_chairman_model()
+    chairman_temp = settings.chairman_temperature
 
     try:
-        response = await query_model(chairman_model, messages)
+        response = await query_model(chairman_model, messages, temperature=chairman_temp)
 
         # Check for error in response
         if response is None or response.get('error'):

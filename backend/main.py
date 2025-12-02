@@ -163,8 +163,10 @@ async def send_message_stream(conversation_id: str, body: SendMessageRequest, re
                     raise asyncio.CancelledError("Client disconnected")
 
                 # Run search (now fully async for Tavily/Brave, threaded only for DuckDuckGo)
-                search_context = await perform_web_search(search_query, 5, provider, settings.full_content_results)
-                yield f"data: {json.dumps({'type': 'search_complete', 'data': {'search_query': search_query, 'search_context': search_context, 'provider': provider.value}})}\n\n"
+                search_result = await perform_web_search(search_query, 5, provider, settings.full_content_results)
+                search_context = search_result["results"]
+                extracted_query = search_result["extracted_query"]
+                yield f"data: {json.dumps({'type': 'search_complete', 'data': {'search_query': search_query, 'extracted_query': extracted_query, 'search_context': search_context, 'provider': provider.value}})}\n\n"
                 await asyncio.sleep(0.05)
 
             # Stage 1: Collect responses
@@ -770,6 +772,7 @@ async def get_openrouter_models():
                 models.append({
                     "id": f"openrouter:{model.get('id')}",
                     "name": f"{model.get('name', model.get('id'))} [OpenRouter]",
+                    "provider": "OpenRouter",
                     "context_length": model.get("context_length"),
                     "is_free": is_free,
                 })

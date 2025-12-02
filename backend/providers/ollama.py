@@ -8,10 +8,10 @@ from ..settings import get_settings
 class OllamaProvider(LLMProvider):
     """Ollama API provider."""
     
-    async def query(self, model_id: str, messages: List[Dict[str, str]], timeout: float = 120.0) -> Dict[str, Any]:
+    async def query(self, model_id: str, messages: List[Dict[str, str]], timeout: float = 120.0, temperature: float = 0.7) -> Dict[str, Any]:
         # Strip prefix if present
         model = model_id.removeprefix("ollama:")
-        return await ollama_client.query_model(model, messages, timeout)
+        return await ollama_client.query_model(model, messages, timeout, temperature)
 
     async def get_models(self) -> List[Dict[str, Any]]:
         import httpx

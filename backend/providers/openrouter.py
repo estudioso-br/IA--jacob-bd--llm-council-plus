@@ -8,13 +8,13 @@ from ..settings import get_settings
 class OpenRouterProvider(LLMProvider):
     """OpenRouter API provider."""
     
-    async def query(self, model_id: str, messages: List[Dict[str, str]], timeout: float = 120.0) -> Dict[str, Any]:
+    async def query(self, model_id: str, messages: List[Dict[str, str]], timeout: float = 120.0, temperature: float = 0.7) -> Dict[str, Any]:
         # Strip internal prefix if present
         if model_id.startswith("openrouter:"):
             model_id = model_id.replace("openrouter:", "", 1)
             
         # OpenRouter module handles key retrieval internally
-        return await openrouter.query_model(model_id, messages, timeout)
+        return await openrouter.query_model(model_id, messages, timeout, temperature)
 
     async def get_models(self) -> List[Dict[str, Any]]:
         # We can reuse the existing endpoint logic or implement a direct fetch here

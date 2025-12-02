@@ -14,7 +14,7 @@ class DeepSeekProvider(LLMProvider):
         settings = get_settings()
         return settings.deepseek_api_key or ""
 
-    async def query(self, model_id: str, messages: List[Dict[str, str]], timeout: float = 120.0) -> Dict[str, Any]:
+    async def query(self, model_id: str, messages: List[Dict[str, str]], timeout: float = 120.0, temperature: float = 0.7) -> Dict[str, Any]:
         api_key = self._get_api_key()
         if not api_key:
             return {"error": True, "error_message": "DeepSeek API key not configured"}
@@ -32,7 +32,7 @@ class DeepSeekProvider(LLMProvider):
                     json={
                         "model": model,
                         "messages": messages,
-                        "temperature": 0.7
+                        "temperature": temperature
                     }
                 )
                 
@@ -50,27 +50,52 @@ class DeepSeekProvider(LLMProvider):
             return {"error": True, "error_message": str(e)}
 
     async def get_models(self) -> List[Dict[str, Any]]:
-        # Return known models, filtering out non-chat types
-        models = []
-        known_deepseek_models = [
-            {"id": "deepseek:deepseek-chat", "name": "DeepSeek Chat (V3)", "provider": "DeepSeek"},
-            {"id": "deepseek:deepseek-reasoner", "name": "DeepSeek Reasoner (R1)", "provider": "DeepSeek"},
-            # Add other known DeepSeek models here if needed in the future
-        ]
-        
+        """Fetch available models from DeepSeek API with hardcoded fallback."""
+        api_key = self._get_api_key()
+
+        # Terms to exclude non-chat models
         excluded_terms = [
-            "embed", "audio", "whisper", "tts", "dall-e", "realtime", 
+            "embed", "audio", "whisper", "tts", "dall-e", "realtime",
             "vision-only", "voxtral", "speech", "transcribe", "sora"
         ]
 
-        for model in known_deepseek_models:
-            mid = model["id"].lower()
-            name = model["name"].lower()
-            if not any(term in mid or term in name for term in excluded_terms):
-                # Append [DeepSeek] to the name
-                model["name"] = f"{model['name']} [DeepSeek]"
-                models.append(model)
-        return models
+        # Try dynamic fetch if API key is available
+        if api_key:
+            try:
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    response = await client.get(
+                        f"{self.BASE_URL}/models",
+                        headers={"Authorization": f"Bearer {api_key}"}
+                    )
+
+                    if response.status_code == 200:
+                        data = response.json()
+                        models = []
+
+                        for model in data.get("data", []):
+                            model_id = model.get("id", "")
+                            model_id_lower = model_id.lower()
+
+                            # Skip non-chat models
+                            if any(term in model_id_lower for term in excluded_terms):
+                                continue
+
+                            models.append({
+                                "id": f"deepseek:{model_id}",
+                                "name": f"{model_id} [DeepSeek]",
+                                "provider": "DeepSeek"
+                            })
+
+                        if models:
+                            return models
+            except Exception:
+                pass  # Fall through to hardcoded fallback
+
+        # Fallback to known models if API fails or no key
+        return [
+            {"id": "deepseek:deepseek-chat", "name": "DeepSeek Chat (V3) [DeepSeek]", "provider": "DeepSeek"},
+            {"id": "deepseek:deepseek-reasoner", "name": "DeepSeek Reasoner (R1) [DeepSeek]", "provider": "DeepSeek"},
+        ]
 
     async def validate_key(self, api_key: str) -> Dict[str, Any]:
         try:

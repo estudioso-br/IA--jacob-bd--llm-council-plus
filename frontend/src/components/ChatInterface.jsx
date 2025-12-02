@@ -131,6 +131,7 @@ export default function ChatInterface({
                                         {msg.metadata?.search_context && (
                                             <SearchContext
                                                 searchQuery={msg.metadata?.search_query}
+                                                extractedQuery={msg.metadata?.extracted_query}
                                                 searchContext={msg.metadata?.search_context}
                                             />
                                         )}

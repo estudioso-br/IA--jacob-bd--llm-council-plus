@@ -339,6 +339,7 @@ function App() {
                   metadata: {
                     ...lastMsg.metadata,
                     search_query: event.data.search_query,
+                    extracted_query: event.data.extracted_query,
                     search_context: event.data.search_context,
                   }
                 };

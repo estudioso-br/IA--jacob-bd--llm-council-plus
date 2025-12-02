@@ -100,6 +100,9 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
   // Council Configuration (unified across all providers)
   const [councilModels, setCouncilModels] = useState([]);
   const [chairmanModel, setChairmanModel] = useState('');
+  const [councilTemperature, setCouncilTemperature] = useState(0.5);
+  const [chairmanTemperature, setChairmanTemperature] = useState(0.4);
+  const [stage2Temperature, setStage2Temperature] = useState(0.3);
 
   // System Prompts State
   const [prompts, setPrompts] = useState({
@@ -146,6 +149,9 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
       // Council Configuration (unified)
       if (JSON.stringify(councilModels) !== JSON.stringify(settings.council_models)) return true;
       if (chairmanModel !== settings.chairman_model) return true;
+      if (councilTemperature !== (settings.council_temperature ?? 0.5)) return true;
+      if (chairmanTemperature !== (settings.chairman_temperature ?? 0.4)) return true;
+      if (stage2Temperature !== (settings.stage2_temperature ?? 0.3)) return true;
 
       // Remote/Local filters
       if (JSON.stringify(councilMemberFilters) !== JSON.stringify(settings.council_member_filters || {})) return true;
@@ -169,6 +175,9 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
     directProviderToggles,
     councilModels,
     chairmanModel,
+    councilTemperature,
+    chairmanTemperature,
+    stage2Temperature,
     councilMemberFilters,
     chairmanFilter,
     prompts
@@ -260,6 +269,9 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
       // Council Configuration (unified)
       setCouncilModels(data.council_models || []);
       setChairmanModel(data.chairman_model || '');
+      setCouncilTemperature(data.council_temperature ?? 0.5);
+      setChairmanTemperature(data.chairman_temperature ?? 0.4);
+      setStage2Temperature(data.stage2_temperature ?? 0.3);
 
       // Remote/Local filters - load from saved settings
       if (data.council_member_filters) {
@@ -739,6 +751,9 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
       // Initialize with 4 empty slots for council
       setCouncilModels(['', '', '', '']);
       setChairmanModel('');
+      setCouncilTemperature(0.5);
+      setChairmanTemperature(0.4);
+      setStage2Temperature(0.3);
 
       // Reset filters to 'remote' default
       setCouncilMemberFilters({ 0: 'remote', 1: 'remote', 2: 'remote', 3: 'remote' });
@@ -778,6 +793,9 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
         },
         council_models: ['', '', '', ''],
         chairman_model: '',
+        council_temperature: 0.5,
+        chairman_temperature: 0.4,
+        stage2_temperature: 0.3,
         search_query_model: '',
         council_member_filters: { 0: 'remote', 1: 'remote', 2: 'remote', 3: 'remote' },
         chairman_filter: 'remote',
@@ -943,6 +961,9 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
         // Council Configuration (unified)
         council_models: councilModels,
         chairman_model: chairmanModel,
+        council_temperature: councilTemperature,
+        chairman_temperature: chairmanTemperature,
+        stage2_temperature: stage2Temperature,
 
         // Remote/Local filters for each selection
         council_member_filters: councilMemberFilters,
@@ -1088,16 +1109,19 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
   const renderModelOptions = (models) => {
     // Group models by provider
     const grouped = models.reduce((acc, model) => {
-      let providerLabel = model.provider; // Start with the provider field from backend
+      let providerLabel;
 
-      if (model.provider === 'OpenRouter') {
+      // Determine provider from explicit field or infer from model ID
+      const provider = model.provider || (model.id?.startsWith('ollama:') ? 'Ollama' : 'OpenRouter');
+
+      if (provider === 'OpenRouter') {
         providerLabel = 'OpenRouter (Cloud)';
-      } else if (model.provider === 'Ollama') {
+      } else if (provider === 'Ollama') {
         providerLabel = 'Local (Ollama)';
       } else {
         // For all other providers (OpenAI, Anthropic, Google, Mistral, DeepSeek, Groq)
         // from direct connections, append '(Direct)'
-        providerLabel = `${model.provider} (Direct)`;
+        providerLabel = `${provider} (Direct)`;
       }
 
       if (!acc[providerLabel]) acc[providerLabel] = [];
@@ -1583,6 +1607,43 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
                         </div>
                       </div>
                     )}
+
+                    {/* Council Heat Slider */}
+                    <div className="subsection" style={{ marginTop: '20px' }}>
+                      <div className="heat-slider-header">
+                        <h4>Council Heat</h4>
+                        <span className="heat-value">{councilTemperature.toFixed(1)}</span>
+                      </div>
+                      <div className="heat-slider-container">
+                        <span className="heat-icon cold">❄️</span>
+                        <input
+                          type="range"
+                          min="0"
+                          max="1"
+                          step="0.1"
+                          value={councilTemperature}
+                          onChange={(e) => setCouncilTemperature(parseFloat(e.target.value))}
+                          className="heat-slider"
+                          disabled={councilModels.every(m => m.includes('gpt-5.1') || m.includes('o1-') || m.includes('o3-'))}
+                        />
+                        <span className="heat-icon hot">🔥</span>
+                      </div>
+                      {councilModels.some(m => m.includes('gpt-5.1') || m.includes('o1-') || m.includes('o3-')) && (
+                        <div className="heat-warning">
+                          ⚠️ Some selected models (e.g. GPT-5.1, o1) enforce fixed temperature and will ignore this setting.
+                        </div>
+                      )}
+                      <p className="heat-note" style={{ fontSize: '11px', color: '#94a3b8', marginTop: '8px' }}>
+                        ℹ️ Stage 2 (Peer Ranking) has its own temperature setting.{' '}
+                        <button
+                          type="button"
+                          onClick={() => { setActiveSection('prompts'); setActivePromptTab('stage2'); }}
+                          style={{ background: 'none', border: 'none', color: '#3b82f6', cursor: 'pointer', textDecoration: 'underline', padding: 0, fontSize: '11px' }}
+                        >
+                          Configure in System Prompts → Stage 2
+                        </button>
+                      </p>
+                    </div>
                   </div>
                   {/* Chairman */}
                   <div className="subsection" style={{ marginTop: '24px' }}>
@@ -1624,6 +1685,33 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
                         <option value="">Select a model</option>
                         {renderModelOptions(filterByRemoteLocal(getFilteredAvailableModels(), chairmanFilter))}
                       </select>
+                    </div>
+
+                    {/* Chairman Heat Slider */}
+                    <div className="subsection" style={{ marginTop: '16px' }}>
+                      <div className="heat-slider-header">
+                        <h4>Chairman Heat</h4>
+                        <span className="heat-value">{chairmanTemperature.toFixed(1)}</span>
+                      </div>
+                      <div className="heat-slider-container">
+                        <span className="heat-icon cold">❄️</span>
+                        <input
+                          type="range"
+                          min="0"
+                          max="1"
+                          step="0.1"
+                          value={chairmanTemperature}
+                          onChange={(e) => setChairmanTemperature(parseFloat(e.target.value))}
+                          className="heat-slider"
+                          disabled={chairmanModel.includes('gpt-5.1') || chairmanModel.includes('o1-') || chairmanModel.includes('o3-')}
+                        />
+                        <span className="heat-icon hot">🔥</span>
+                      </div>
+                      {(chairmanModel.includes('gpt-5.1') || chairmanModel.includes('o1-') || chairmanModel.includes('o3-')) && (
+                        <div className="heat-warning">
+                          ⚠️ This model enforces fixed temperature and will ignore this setting.
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -1679,6 +1767,31 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
                   {activePromptTab === 'stage2' && (
                     <div className="prompt-content">
                       <label>Stage 2: Peer Ranking</label>
+
+                      {/* Stage 2 Temperature Slider - Positioned prominently */}
+                      <div className="stage2-heat-section" style={{ marginTop: '12px', marginBottom: '16px', padding: '15px', background: 'rgba(59, 130, 246, 0.1)', borderRadius: '8px', border: '1px solid rgba(59, 130, 246, 0.2)' }}>
+                        <div className="heat-slider-header">
+                          <h4 style={{ margin: 0, fontSize: '14px', color: '#e2e8f0' }}>Stage 2 Heat</h4>
+                          <span className="heat-value">{stage2Temperature.toFixed(1)}</span>
+                        </div>
+                        <p className="section-description" style={{ fontSize: '12px', margin: '8px 0' }}>
+                          Lower temperature recommended for consistent, parseable ranking output.
+                        </p>
+                        <div className="heat-slider-container">
+                          <span className="heat-icon cold">❄️</span>
+                          <input
+                            type="range"
+                            min="0"
+                            max="1"
+                            step="0.1"
+                            value={stage2Temperature}
+                            onChange={(e) => setStage2Temperature(parseFloat(e.target.value))}
+                            className="heat-slider"
+                          />
+                          <span className="heat-icon hot">🔥</span>
+                        </div>
+                      </div>
+
                       <p className="section-description" style={{ marginBottom: '10px' }}>
                         Instructs models how to rank and evaluate peer responses.
                       </p>
@@ -1911,16 +2024,20 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
               <div className="settings-header">
                 <h2>Confirm Reset</h2>
               </div>
-              <div className="settings-content confirmation-content">
-                <p>Are you sure you want to reset to defaults?</p>
-                <div className="confirmation-details">
+              <div className="settings-content confirmation-content" style={{ padding: '20px 24px' }}>
+                <p style={{ marginBottom: '16px' }}>Are you sure you want to reset to defaults?</p>
+                <div className="confirmation-details" style={{ padding: '16px 20px' }}>
                   <p><strong>This will reset:</strong></p>
-                  <ul>
-                    <li>All model selections</li>
-                    <li>System prompts</li>
-                    <li>General settings</li>
+                  <ul style={{ margin: '12px 0', lineHeight: '1.8' }}>
+                    <li>Provider toggles → All disabled</li>
+                    <li>Model selections → Cleared</li>
+                    <li>Temperatures → Defaults (0.5 / 0.4 / 0.3)</li>
+                    <li>System prompts → Defaults</li>
+                    <li>Search provider → DuckDuckGo</li>
+                    <li>Jina fetch count → 3</li>
+                    <li>Ollama URL → localhost:11434</li>
                   </ul>
-                  <p className="confirmation-safe">✓ API keys will be PRESERVED</p>
+                  <p className="confirmation-safe" style={{ marginTop: '14px' }}>✓ API keys will be PRESERVED</p>
                 </div>
               </div>
               <div className="settings-footer">

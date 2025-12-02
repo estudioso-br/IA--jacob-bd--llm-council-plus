@@ -14,7 +14,7 @@ class GroqProvider(LLMProvider):
         settings = get_settings()
         return settings.groq_api_key or ""
 
-    async def query(self, model_id: str, messages: List[Dict[str, str]], timeout: float = 120.0) -> Dict[str, Any]:
+    async def query(self, model_id: str, messages: List[Dict[str, str]], timeout: float = 120.0, temperature: float = 0.7) -> Dict[str, Any]:
         api_key = self._get_api_key()
         if not api_key:
             return {"error": True, "error_message": "Groq API key not configured"}
@@ -33,7 +33,7 @@ class GroqProvider(LLMProvider):
                     json={
                         "model": model,
                         "messages": messages,
-                        "temperature": 0.7
+                        "temperature": temperature
                     }
                 )
                 

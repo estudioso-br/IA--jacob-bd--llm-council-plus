@@ -13,7 +13,8 @@ INITIAL_RETRY_DELAY = 1.0  # seconds
 async def query_model(
     model: str,
     messages: List[Dict[str, str]],
-    timeout: float = 120.0
+    timeout: float = 120.0,
+    temperature: float = 0.7
 ) -> Optional[Dict[str, Any]]:
     """
     Query a single model via OpenRouter API with retry logic for rate limits.
@@ -22,6 +23,7 @@ async def query_model(
         model: OpenRouter model identifier (e.g., "openai/gpt-4o")
         messages: List of message dicts with 'role' and 'content'
         timeout: Request timeout in seconds
+        temperature: Model temperature
 
     Returns:
         Response dict with 'content', optional 'reasoning_details', and 'error' if failed
@@ -35,6 +37,7 @@ async def query_model(
     payload = {
         "model": model,
         "messages": messages,
+        "temperature": temperature
     }
 
     last_error = None
@@ -107,7 +110,8 @@ async def query_model(
 
 async def query_models_parallel(
     models: List[str],
-    messages: List[Dict[str, str]]
+    messages: List[Dict[str, str]],
+    temperature: float = 0.7
 ) -> Dict[str, Optional[Dict[str, Any]]]:
     """
     Query multiple models in parallel with batching for rate limit protection.
@@ -135,7 +139,7 @@ async def query_models_parallel(
             print(f"Processing batch {i//BATCH_SIZE + 1}: {batch}")
             
             # Create tasks for this batch
-            tasks = [query_model(model, messages) for model in batch]
+            tasks = [query_model(model, messages, temperature=temperature) for model in batch]
             
             # Wait for batch to complete
             batch_responses = await asyncio.gather(*tasks)
@@ -151,7 +155,7 @@ async def query_models_parallel(
         return results
     
     # For 5 or fewer models, send all at once (original behavior)
-    tasks = [query_model(model, messages) for model in models]
+    tasks = [query_model(model, messages, temperature=temperature) for model in models]
 
     # Wait for all to complete
     responses = await asyncio.gather(*tasks)
