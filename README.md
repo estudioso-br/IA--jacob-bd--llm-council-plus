@@ -221,25 +221,9 @@ Build and run the app as a single container:
 docker compose up -d --build
 ```
 
-Then open **http://YOUR_SERVER_IP:8001**.
+Then open **http://YOUR_SERVER_IP:8001**. Conversations and settings are persisted to `./data` on the host automatically.
 
-The compose file stores conversations and settings in `./data` on the host:
-
-```yaml
-volumes:
-  - ./data:/app/data
-```
-
-For a domain behind a reverse proxy, point the proxy to `http://127.0.0.1:8001`.
-When the frontend and API are served from the same domain, leave `BACKEND_HOST`
-empty. If you serve the frontend separately, set:
-
-```bash
-BACKEND_HOST=https://api.example.com
-FRONTEND_HOST=https://council.example.com
-```
-
-`FRONTEND_HOST` may contain multiple comma-separated origins.
+For Ollama, reverse proxy setup, environment variables, and upgrade instructions, see **[docs/DOCKER.md](docs/DOCKER.md)**.
 
 ### Network Access
 
@@ -270,7 +254,7 @@ cd frontend
 npm run dev -- --host
 ```
 
-The frontend automatically detects the hostname and connects to the backend on the same IP. CORS is configured to allow requests from any hostname on ports 5173 and 3000.
+The frontend automatically detects the hostname and connects to the backend on the same IP. When running via `./start.sh`, CORS is configured to allow requests from any hostname on ports 5173 and 3000. When running via Docker, the frontend and API share the same origin so no external CORS is needed.
 
 ---
 

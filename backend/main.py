@@ -18,17 +18,24 @@ from .settings import get_settings, update_settings, Settings, DEFAULT_COUNCIL_M
 
 app = FastAPI(title="LLM Council Plus API")
 
+FRONTEND_DIST_DIR = os.getenv(
+    "FRONTEND_DIST_DIR",
+    os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend", "dist"),
+)
+
 CORS_FRONTEND_HOSTS = [
     origin.strip()
     for origin in os.getenv("FRONTEND_HOST", "").split(",")
     if origin.strip()
 ]
 
-# In production, FRONTEND_HOST can contain comma-separated allowed origins.
+# Suppress the dev-ports regex when the built frontend exists — same-origin, no CORS needed.
+_dev_cors_regex = None if (os.path.isdir(FRONTEND_DIST_DIR) or CORS_FRONTEND_HOSTS) else r"http://.*:(5173|5174|3000)"
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_FRONTEND_HOSTS,
-    allow_origin_regex=None if CORS_FRONTEND_HOSTS else r"http://.*:(5173|5174|3000)",
+    allow_origin_regex=_dev_cors_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -63,10 +70,7 @@ class Conversation(BaseModel):
     messages: List[Dict[str, Any]]
 
 
-FRONTEND_DIST_DIR = os.getenv(
-    "FRONTEND_DIST_DIR",
-    os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend", "dist"),
-)
+
 
 
 @app.get("/api/health")

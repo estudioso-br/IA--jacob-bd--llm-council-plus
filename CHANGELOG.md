@@ -5,6 +5,20 @@ All notable changes to LLM Council Plus will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.3] - 2026-05-04
+
+### Added
+- **Docker support** (PR #5): Single-container deployment via `docker compose up -d --build` serving both frontend and API on port 8001. Thanks @kcelsi!
+- **Docker healthcheck**: Backend liveness polling via `/api/health` every 30s with automatic restart on failure
+- **Non-root container user**: Container now runs as `appuser` for reduced attack surface
+- **`docs/` directory**: New structured documentation folder
+- **`docs/DOCKER.md`**: Comprehensive Docker deployment guide covering environment variables, persistent storage, Ollama integration, reverse proxy setup (nginx/Caddy with SSE notes), upgrades, and troubleshooting
+
+### Changed
+- **CORS hardening**: Dev-ports regex (`5173|5174|3000`) is now suppressed when the built frontend is present (Docker/production mode) — same-origin deployments no longer expose API to external dev-port origins
+- **Root cleanup**: Removed stub `main.py`; moved `QUICKSTART.md` and `TEST_PLAN_SEARCH.md` into `docs/`
+- **README**: Docker section condensed to quick-start + link to `docs/DOCKER.md`; stale CORS description updated
+
 ## [0.2.2] - 2026-02-18
 
 ### Fixed
