@@ -84,6 +84,7 @@ class AnthropicProvider(LLMProvider):
                     # Fallback to hardcoded list if API fails (e.g. older keys or API not enabled)
                     return [
                         {"id": "anthropic:claude-opus-4-7", "name": "Claude Opus 4.7 [Anthropic]", "provider": "Anthropic"},
+                        {"id": "anthropic:claude-opus-4-6", "name": "Claude Opus 4.6 [Anthropic]", "provider": "Anthropic"},
                         {"id": "anthropic:claude-sonnet-4-6", "name": "Claude Sonnet 4.6 [Anthropic]", "provider": "Anthropic"},
                         {"id": "anthropic:claude-haiku-4-5-20251001", "name": "Claude Haiku 4.5 [Anthropic]", "provider": "Anthropic"},
                         {"id": "anthropic:claude-3-5-sonnet-20241022", "name": "Claude 3.5 Sonnet [Anthropic]", "provider": "Anthropic"},
