@@ -1,0 +1,35 @@
+FROM nikolaik/python-nodejs:python3.12-nodejs22-slim
+
+WORKDIR /app
+
+ENV PYTHONUNBUFFERED=1 \
+    FRONTEND_DIST_DIR=/app/frontend/dist
+
+RUN groupadd --system appgroup \
+    && useradd --system --gid appgroup --no-create-home appuser
+
+RUN pip install --no-cache-dir uv
+
+COPY pyproject.toml uv.lock README.md ./
+RUN uv sync --frozen --no-dev --no-install-project
+
+COPY frontend/package.json frontend/package-lock.json ./frontend/
+RUN cd frontend && npm ci
+
+COPY . .
+RUN cd frontend && npm run build
+
+RUN chmod +x /app/docker-entrypoint.sh
+
+# chown before USER so the entrypoint can write config.js into dist/ at startup.
+RUN chown -R appuser:appgroup /app
+
+EXPOSE 8001
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD python3 -c "import urllib.request; urllib.request.urlopen('http://localhost:8001/api/health')" || exit 1
+
+USER appuser
+
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
+CMD ["/app/.venv/bin/uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8001"]

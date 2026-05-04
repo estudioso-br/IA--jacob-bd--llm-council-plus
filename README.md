@@ -213,6 +213,18 @@ npm run dev
 
 Then open **http://localhost:5173** in your browser.
 
+### Docker / VPS Deployment
+
+Build and run the app as a single container:
+
+```bash
+docker compose up -d --build
+```
+
+Then open **http://YOUR_SERVER_IP:8001**. Conversations and settings are persisted to `./data` on the host automatically.
+
+For Ollama, reverse proxy setup, environment variables, and upgrade instructions, see **[docs/DOCKER.md](docs/DOCKER.md)**.
+
 ### Network Access
 
 The application is configured to be accessible from other devices on your local network.
@@ -242,7 +254,7 @@ cd frontend
 npm run dev -- --host
 ```
 
-The frontend automatically detects the hostname and connects to the backend on the same IP. CORS is configured to allow requests from any hostname on ports 5173 and 3000.
+The frontend automatically detects the hostname and connects to the backend on the same IP. When running via `./start.sh`, CORS is configured to allow requests from any hostname on ports 5173 and 3000. When running via Docker, the frontend and API share the same origin so no external CORS is needed.
 
 ---
 
