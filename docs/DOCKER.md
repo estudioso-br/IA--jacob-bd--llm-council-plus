@@ -204,6 +204,19 @@ You are likely accessing the app from a different origin than the one Docker is 
 - Access via `http://YOUR_HOST_IP:8001` (not `localhost` from another machine)
 - Or set `FRONTEND_HOST` and `BACKEND_HOST` appropriately for your split-origin setup
 
+### Settings won't save / Permission denied on `/app/data/settings.json`
+
+Docker creates the `./data` directory as root when the container first starts. On older images (before this was fixed in the entrypoint), `appuser` inside the container couldn't write to it.
+
+If you're running an older image, fix it manually:
+
+```bash
+chmod 777 ./data
+docker compose restart
+```
+
+Rebuilding from the latest image (`docker compose up -d --build`) fixes this permanently — the entrypoint now corrects ownership automatically on every startup.
+
 ### Streaming responses don't work behind nginx
 
 Add `proxy_buffering off;` and `proxy_cache off;` to your nginx location block — see the nginx example above.
